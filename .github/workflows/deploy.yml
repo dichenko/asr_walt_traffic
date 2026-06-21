@@ -1,9 +1,14 @@
 name: Deploy
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
+
+concurrency:
+  group: deploy-walt-traffic
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -12,14 +17,14 @@ jobs:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
+          host: ${{ secrets.WALT_TRAFFIC_HOST }}
+          username: ${{ secrets.WALT_TRAFFIC_USER }}
+          key: ${{ secrets.WALT_TRAFFIC_SSH_KEY }}
+          port: ${{ secrets.WALT_TRAFFIC_PORT || 22 }}
           script_stop: true
           command_timeout: 10m
           script: |
             set -eu
-            cd "${{ secrets.VPS_PROJECT_DIR }}"
+            cd /opt/asr_walt_traffic
             git pull --ff-only
             sh scripts/deploy.sh
