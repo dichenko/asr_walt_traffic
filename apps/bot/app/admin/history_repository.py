@@ -100,21 +100,17 @@ class MessageHistoryRepository:
 
     async def fetch_page(self, query: HistoryQuery) -> HistoryPage:
         normalized = _normalize_query(query)
-        total = await self._count_total()
-
-        if _requires_python_action_pass(normalized):
-            raw_rows = await self._fetch_raw(normalized, paginate=False)
-            rows = [_to_history_row(row) for row in raw_rows]
-            rows = _apply_python_filters(rows, normalized.filters)
-            rows = _sort_rows(rows, normalized.sort_field, normalized.sort_dir)
-            filtered = len(rows)
-            page_rows = rows[normalized.start : normalized.start + normalized.length]
-            return HistoryPage(rows=page_rows, total=total, filtered=filtered)
-
-        filtered = await self._count_filtered(normalized)
-        raw_rows = await self._fetch_raw(normalized, paginate=True)
-        rows = [_to_history_row(row) for row in raw_rows]
-        return HistoryPage(rows=rows, total=total, filtered=filtered)
+        raw_rows = await self._fetch_raw(
+            HistoryQuery(sort_field="date", sort_dir="asc"),
+            paginate=False,
+        )
+        rows = _pair_history_rows(raw_rows)
+        total = len(rows)
+        rows = _apply_python_filters(rows, normalized.filters)
+        rows = _sort_rows(rows, normalized.sort_field, normalized.sort_dir)
+        filtered = len(rows)
+        page_rows = rows[normalized.start : normalized.start + normalized.length]
+        return HistoryPage(rows=page_rows, total=total, filtered=filtered)
 
     async def _count_total(self) -> int:
         stmt = select(func.count(Message.id)).where(*_base_message_conditions())
@@ -193,16 +189,6 @@ def _normalize_query(query: HistoryQuery) -> HistoryQuery:
         sort_field=query.sort_field,
         sort_dir=sort_dir,
         filters=query.filters,
-    )
-
-
-def _requires_python_action_pass(query: HistoryQuery) -> bool:
-    return (
-        bool(query.filters.agent_action.strip())
-        or query.filters.time_from is not None
-        or query.filters.time_to is not None
-        or query.sort_field == "time"
-        or query.sort_field == "agent_action"
     )
 
 
@@ -309,6 +295,75 @@ def _to_history_row(row: _RawHistoryRow) -> HistoryRow:
     )
 
 
+def _pair_history_rows(raw_rows: list[_RawHistoryRow]) -> list[HistoryRow]:
+    rows: list[HistoryRow] = []
+    pending_by_trace: dict[str, tuple[_RawHistoryRow, list[_RawHistoryRow]]] = {}
+
+    for raw_row in sorted(
+        raw_rows,
+        key=lambda item: (item.message.created_at, item.message.id),
+    ):
+        message = raw_row.message
+        trace_key = message.trace_id or f"message:{message.id}"
+        if message.direction == "in":
+            pending_by_trace[trace_key] = (raw_row, [raw_row])
+            continue
+
+        pending = pending_by_trace.pop(trace_key, None)
+        if pending is None:
+            rows.append(_history_row_from_pair(None, raw_row, [raw_row]))
+            continue
+
+        incoming, action_sources = pending
+        action_sources.append(raw_row)
+        rows.append(_history_row_from_pair(incoming, raw_row, action_sources))
+
+    for incoming, action_sources in pending_by_trace.values():
+        rows.append(_history_row_from_pair(incoming, None, action_sources))
+
+    return rows
+
+
+def _history_row_from_pair(
+    incoming: _RawHistoryRow | None,
+    outgoing: _RawHistoryRow | None,
+    action_sources: list[_RawHistoryRow],
+) -> HistoryRow:
+    source = incoming or outgoing
+    if source is None:
+        raise ValueError("History row requires at least one message")
+
+    source_message = source.message
+    created_at = source_message.created_at
+    language = (
+        (outgoing.message.language if outgoing else None)
+        or source_message.language
+        or source.user.preferred_language
+        or ""
+    )
+    direction = "in/out" if incoming and outgoing else source_message.direction
+    return HistoryRow(
+        date=created_at.date().isoformat(),
+        time=created_at.time().replace(microsecond=0).isoformat(),
+        direction=direction,
+        tg_id=source.user.telegram_user_id,
+        user_text=incoming.message.text or "" if incoming else "",
+        llm_answer_text=outgoing.message.text or "" if outgoing else "",
+        language=language,
+        message_type=(
+            incoming.message.message_type if incoming else source_message.message_type
+        ),
+        agent_action=", ".join(
+            _dedupe(
+                action
+                for action_source in action_sources
+                for action in _detect_actions(action_source)
+            )
+        ),
+        created_at=created_at,
+    )
+
+
 def _detect_actions(row: _RawHistoryRow) -> list[str]:
     payload = row.payload
     output = row.run_output
@@ -360,10 +415,43 @@ def _apply_python_filters(
         filtered = [
             row for row in filtered if time.fromisoformat(row.time) <= filters.time_to
         ]
+    if filters.tg_id:
+        needle = filters.tg_id.casefold()
+        filtered = [row for row in filtered if needle in str(row.tg_id).casefold()]
+    if filters.direction:
+        filtered = [
+            row
+            for row in filtered
+            if row.direction == filters.direction
+            or filters.direction in row.direction.split("/")
+        ]
+    if filters.user_text:
+        needle = filters.user_text.casefold()
+        filtered = [row for row in filtered if needle in row.user_text.casefold()]
+    if filters.llm_answer_text:
+        needle = filters.llm_answer_text.casefold()
+        filtered = [row for row in filtered if needle in row.llm_answer_text.casefold()]
+    if filters.language:
+        filtered = [row for row in filtered if row.language == filters.language]
+    if filters.message_type:
+        filtered = [row for row in filtered if row.message_type == filters.message_type]
     if filters.agent_action.strip():
         needle = filters.agent_action.casefold()
         filtered = [
             row for row in filtered if needle in row.agent_action.casefold()
+        ]
+    if filters.global_search:
+        needle = filters.global_search.casefold()
+        filtered = [
+            row
+            for row in filtered
+            if needle in row.user_text.casefold()
+            or needle in row.llm_answer_text.casefold()
+            or needle in str(row.tg_id).casefold()
+            or needle in row.language.casefold()
+            or needle in row.message_type.casefold()
+            or needle in row.direction.casefold()
+            or needle in row.agent_action.casefold()
         ]
     return filtered
 
