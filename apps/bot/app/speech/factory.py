@@ -27,7 +27,7 @@ class SpeechProviders:
     def tts_for_language(self, language: str) -> TextToSpeechProvider:
         normalized_language = normalize_language(language)
         if normalized_language == "uz":
-            return self.muxlisa
+            return self.aisha
         if normalized_language == "ru":
             return self.yandex
         return self.openai
