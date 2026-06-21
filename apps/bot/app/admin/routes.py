@@ -35,6 +35,7 @@ from app.admin.one_time_links import (
     validate_admin_one_time_login_token,
 )
 from app.admin.settings_repository import get_all_settings, get_setting, set_setting
+from app.admin.stats_repository import AdminStatsRepository
 from app.config import get_settings
 from app.llm.manager import test_provider
 from app.llm.repository import (
@@ -525,6 +526,14 @@ async def api_history(request: Request):
     }
 
 
+@router.get("/api/stats")
+async def api_stats(request: Request):
+    await _require_admin(request)
+    async with _get_db_session() as session:
+        stats = await AdminStatsRepository(session).fetch()
+    return stats.as_dict()
+
+
 @router.put("/api/settings/system-prompt")
 async def api_save_system_prompt(request: Request):
     tg_id = await _require_admin(request)
@@ -688,6 +697,12 @@ async def llm_providers_page(request: Request):
 async def history_page(request: Request):
     await _require_admin(request)
     return _render_history_page()
+
+
+@router.get("/stats", response_class=HTMLResponse)
+async def stats_page(request: Request):
+    await _require_admin(request)
+    return _render_stats_page()
 
 
 def _render_login_page() -> str:
@@ -866,6 +881,131 @@ def _render_history_page() -> str:
         <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
         <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
         """,
+    )
+
+
+def _render_stats_page() -> str:
+    body = """
+    <main class="content content-stats">
+        <section class="stats-header">
+            <h2>&#1057;&#1090;&#1072;&#1090;&#1080;&#1089;&#1090;&#1080;&#1082;&#1072;</h2>
+            <button type="button" id="stats-refresh" class="btn-secondary">
+                &#1054;&#1073;&#1085;&#1086;&#1074;&#1080;&#1090;&#1100;
+            </button>
+        </section>
+
+        <section class="stats-cards">
+            <article class="metric-card">
+                <span class="metric-label">&#1042;&#1089;&#1077;&#1075;&#1086; &#1087;&#1086;&#1083;&#1100;&#1079;&#1086;&#1074;&#1072;&#1090;&#1077;&#1083;&#1077;&#1081;</span>
+                <strong id="metric-total-users">-</strong>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">&#1042;&#1089;&#1077;&#1075;&#1086; &#1089;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1081;</span>
+                <strong id="metric-total-messages">-</strong>
+            </article>
+        </section>
+
+        <section class="stats-grid">
+            <article class="chart-panel">
+                <h3>&#1053;&#1086;&#1074;&#1099;&#1077; &#1087;&#1086;&#1083;&#1100;&#1079;&#1086;&#1074;&#1072;&#1090;&#1077;&#1083;&#1080; &#1087;&#1086; &#1076;&#1085;&#1103;&#1084;</h3>
+                <div class="chart-box"><canvas id="new-users-chart"></canvas></div>
+            </article>
+            <article class="chart-panel">
+                <h3>&#1040;&#1082;&#1090;&#1080;&#1074;&#1085;&#1099;&#1077; &#1087;&#1086;&#1083;&#1100;&#1079;&#1086;&#1074;&#1072;&#1090;&#1077;&#1083;&#1080; &#1087;&#1086; &#1076;&#1085;&#1103;&#1084;</h3>
+                <div class="chart-box"><canvas id="active-users-chart"></canvas></div>
+            </article>
+        </section>
+        <p id="stats-message" class="muted"></p>
+    </main>
+
+    <script>
+    let newUsersChart;
+    let activeUsersChart;
+
+    function formatNumber(value) {
+        return new Intl.NumberFormat('ru-RU').format(value || 0);
+    }
+
+    function chartOptions() {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {mode: 'index', intersect: false},
+            plugins: {legend: {display: false}},
+            scales: {
+                x: {grid: {display: false}, ticks: {maxRotation: 0, autoSkip: true}},
+                y: {beginAtZero: true, ticks: {precision: 0}}
+            }
+        };
+    }
+
+    function renderLineChart(chart, canvasId, labels, data, color) {
+        const config = {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    data,
+                    borderColor: color,
+                    backgroundColor: color + '22',
+                    fill: true,
+                    tension: 0.28,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: chartOptions()
+        };
+        if (chart) {
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = data;
+            chart.update();
+            return chart;
+        }
+        return new Chart(document.getElementById(canvasId), config);
+    }
+
+    async function loadStats() {
+        const message = document.getElementById('stats-message');
+        message.textContent = '';
+        try {
+            const response = await fetch('/admin/api/stats');
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            const data = await response.json();
+            document.getElementById('metric-total-users').textContent = formatNumber(data.totalUsers);
+            document.getElementById('metric-total-messages').textContent = formatNumber(data.totalMessages);
+
+            const labels = data.daily.map((item) => item.date.slice(5));
+            newUsersChart = renderLineChart(
+                newUsersChart,
+                'new-users-chart',
+                labels,
+                data.daily.map((item) => item.newUsers),
+                '#2AABEE'
+            );
+            activeUsersChart = renderLineChart(
+                activeUsersChart,
+                'active-users-chart',
+                labels,
+                data.daily.map((item) => item.activeUsers),
+                '#27ae60'
+            );
+        } catch (err) {
+            message.textContent = 'Stats load failed';
+        }
+    }
+
+    document.getElementById('stats-refresh').addEventListener('click', loadStats);
+    loadStats();
+    </script>
+    """
+    return _base_html(
+        title="Stats",
+        body=body,
+        is_page=True,
+        extra_head='<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>',
     )
 
 
@@ -1142,6 +1282,7 @@ def _base_html(
             <a href="/admin/tts-prompts">Промпты TTS</a>
             <a href="/admin/clinic-info">Справка о клинике</a>
             <a href="/admin/llm-providers">LLM Providers</a>
+            <a href="/admin/stats">&#1057;&#1090;&#1072;&#1090;&#1080;&#1089;&#1090;&#1080;&#1082;&#1072;</a>
             <a href="/admin/history">История</a>
             <span class="nav-spacer"></span>
             <form action="/admin/auth/logout" method="POST">
@@ -1235,6 +1376,65 @@ def _base_html(
     flex-direction: column;
   }}
   .content-wide {{ max-width: 86vw; }}
+  .content-stats {{
+    max-width: 1180px;
+    gap: 18px;
+  }}
+
+  .stats-header {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }}
+  .stats-header h2 {{
+    font-size: 22px;
+    margin: 0;
+  }}
+  .stats-cards {{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    gap: 16px;
+  }}
+  .metric-card,
+  .chart-panel {{
+    background: var(--card-bg);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(209,213,219,0.75);
+  }}
+  .metric-card {{
+    padding: 20px 22px;
+  }}
+  .metric-label {{
+    display: block;
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 10px;
+  }}
+  .metric-card strong {{
+    display: block;
+    font-size: 34px;
+    line-height: 1;
+  }}
+  .stats-grid {{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }}
+  .chart-panel {{
+    padding: 18px;
+    min-width: 0;
+  }}
+  .chart-panel h3 {{
+    font-size: 15px;
+    margin: 0 0 14px;
+  }}
+  .chart-box {{
+    position: relative;
+    height: 320px;
+    min-width: 0;
+  }}
 
   .card {{
     background: var(--card-bg);
@@ -1497,6 +1697,10 @@ def _base_html(
     .nav-brand {{ margin-right: 8px; }}
     .content {{ padding: 20px 12px; }}
     .content-wide {{ max-width: 100%; }}
+    .content-stats {{ max-width: 100%; }}
+    .stats-cards,
+    .stats-grid {{ grid-template-columns: 1fr; }}
+    .chart-box {{ height: 280px; }}
     .card {{ padding: 24px 20px; }}
   }}
 </style>
