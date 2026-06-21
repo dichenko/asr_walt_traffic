@@ -2,29 +2,19 @@
 # Replace domains with actual ones. After saving, run: caddy reload
 
 walt-traffic.liven8n.site {
-    reverse_proxy 127.0.0.1:8000
+    encode zstd gzip
+
+    reverse_proxy 127.0.0.1:8020
 
     header {
         X-Content-Type-Options nosniff
-        X-Frame-Options DENY
+        X-Frame-Options SAMEORIGIN
+        Referrer-Policy no-referrer
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         -Server
     }
 
     log {
         output file /var/log/caddy/walt-traffic-access.log
-    }
-}
-
-admin-walt-traffic.liven8n.site {
-    reverse_proxy 127.0.0.1:8000
-
-    header {
-        X-Content-Type-Options nosniff
-        X-Frame-Options SAMEORIGIN
-        -Server
-    }
-
-    log {
-        output file /var/log/caddy/admin-walt-traffic-access.log
     }
 }
