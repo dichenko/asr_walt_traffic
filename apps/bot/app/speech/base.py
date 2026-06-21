@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
-SpeechProviderName = Literal["openai", "aisha", "yandex", "azure", "mock"]
+SpeechProviderName = Literal["openai", "aisha", "muxlisa", "yandex", "azure", "mock"]
 AudioFormat = Literal["mp3", "opus", "aac", "flac", "wav", "pcm"]
 
 

@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     openai_stt_max_audio_size_mb: int = 25
     openai_stt_prompt: str = ""
     openai_tts_model: str = "gpt-4o-mini-tts"
-    openai_tts_voice: str = "marin"
+    openai_tts_voice: str = "onyx"
     openai_tts_fallback_voice: str = "cedar"
     openai_tts_response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] = (
         "opus"
@@ -97,11 +97,17 @@ class Settings(BaseSettings):
     aisha_tts_mood: str = "Neutral"
     aisha_tts_speed: float = 1.0
 
+    muxlisa_api_key: SecretStr | None = None
+    muxlisa_base_url: str = "https://service.muxlisa.uz"
+    muxlisa_tts_timeout_ms: int = 60000
+    muxlisa_tts_max_chars: int = 1512
+    muxlisa_tts_speaker: int = 0
+
     yandex_speechkit_api_key: SecretStr | None = None
     yandex_tts_base_url: str = "https://tts.api.cloud.yandex.net"
     yandex_tts_model: str = "yandex-speechkit-tts-v1"
     yandex_tts_language: str = "ru-RU"
-    yandex_tts_voice: str = "alena"
+    yandex_tts_voice: str = "zahar"
     yandex_tts_emotion: str = "good"
     yandex_tts_speed: str = "1.15"
     yandex_tts_format: str = "oggopus"

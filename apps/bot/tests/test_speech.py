@@ -10,6 +10,7 @@ from app.speech.aisha_provider import AishaSpeechProvider
 from app.speech.azure_provider import AzureSpeechProvider, AzureSpeechStatusError
 from app.speech.base import SpeechProviderError
 from app.speech.openai_provider import OpenAISpeechProvider
+from app.speech.muxlisa_provider import MuxlisaSpeechProvider
 from app.speech.temp_files import (
     cleanup_temp_file,
     create_temp_audio_path,
@@ -25,7 +26,7 @@ def test_speech_factory_routes_languages_to_expected_providers():
     providers = create_speech_providers(Settings())
 
     assert providers.stt_for_language("uz") is providers.aisha
-    assert providers.tts_for_language("uz") is providers.aisha
+    assert providers.tts_for_language("uz") is providers.muxlisa
     assert providers.stt_for_language("ru") is providers.openai
     assert providers.tts_for_language("ru") is providers.yandex
     assert providers.stt_for_language("en") is providers.openai
@@ -272,6 +273,80 @@ async def test_aisha_tts_requires_api_key():
     provider = AishaSpeechProvider(Settings())
 
     with pytest.raises(SpeechProviderError, match="AISHA_API_KEY"):
+        await provider.synthesize("Salom", "uz")
+
+
+async def test_muxlisa_tts_posts_form_and_writes_audio(monkeypatch):
+    test_dir = _make_test_dir()
+    calls = []
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"content-type": "audio/ogg"}
+        content = b"ogg-bytes"
+        text = ""
+
+    class FakeAsyncClient:
+        def __init__(self, *, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, *, headers, data):
+            calls.append(
+                {
+                    "url": url,
+                    "headers": headers,
+                    "data": data,
+                    "timeout": self.timeout,
+                }
+            )
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        "app.speech.muxlisa_provider.httpx.AsyncClient",
+        FakeAsyncClient,
+    )
+
+    provider = MuxlisaSpeechProvider(
+        Settings(
+            speech_temp_dir=str(test_dir),
+            muxlisa_api_key="test-key",
+            muxlisa_tts_timeout_ms=12000,
+            muxlisa_tts_speaker=0,
+        )
+    )
+    result = await provider.synthesize("**Salom** - test", "uz")
+
+    assert Path(result.file_path).read_bytes() == b"ogg-bytes"
+    assert result.provider == "muxlisa"
+    assert result.mime_type == "audio/ogg"
+    assert result.format == "opus"
+    assert result.voice == "0"
+    assert calls == [
+        {
+            "url": "https://service.muxlisa.uz/tts",
+            "headers": {
+                "Authorization": "Bearer test-key",
+                "Accept": "application/json, audio/ogg, audio/wav, audio/mpeg",
+            },
+            "data": {"text": "Salom test", "speaker": "0"},
+            "timeout": 12,
+        }
+    ]
+
+    await cleanup_temp_file(result.file_path, reason="test_cleanup")
+    test_dir.rmdir()
+
+
+async def test_muxlisa_tts_requires_api_key():
+    provider = MuxlisaSpeechProvider(Settings())
+
+    with pytest.raises(SpeechProviderError, match="MUXLISA_API_KEY"):
         await provider.synthesize("Salom", "uz")
 
 

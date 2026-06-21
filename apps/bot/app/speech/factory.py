@@ -4,6 +4,7 @@ from app.config import Settings, get_settings
 from app.speech.aisha_provider import AishaSpeechProvider
 from app.speech.azure_provider import AzureSpeechProvider
 from app.speech.base import SpeechToTextProvider, TextToSpeechProvider
+from app.speech.muxlisa_provider import MuxlisaSpeechProvider
 from app.speech.openai_provider import OpenAISpeechProvider
 from app.speech.yandex_provider import YandexSpeechKitProvider
 from app.telegram.texts import normalize_language
@@ -13,6 +14,7 @@ from app.telegram.texts import normalize_language
 class SpeechProviders:
     openai: OpenAISpeechProvider
     aisha: AishaSpeechProvider
+    muxlisa: MuxlisaSpeechProvider
     azure: AzureSpeechProvider
     yandex: YandexSpeechKitProvider
 
@@ -25,7 +27,7 @@ class SpeechProviders:
     def tts_for_language(self, language: str) -> TextToSpeechProvider:
         normalized_language = normalize_language(language)
         if normalized_language == "uz":
-            return self.aisha
+            return self.muxlisa
         if normalized_language == "ru":
             return self.yandex
         return self.openai
@@ -36,6 +38,7 @@ def create_speech_providers(settings: Settings | None = None) -> SpeechProviders
     return SpeechProviders(
         openai=OpenAISpeechProvider(resolved_settings),
         aisha=AishaSpeechProvider(resolved_settings),
+        muxlisa=MuxlisaSpeechProvider(resolved_settings),
         azure=AzureSpeechProvider(resolved_settings),
         yandex=YandexSpeechKitProvider(resolved_settings),
     )

@@ -9,6 +9,7 @@ from app.speech.base import (
 )
 from app.speech.factory import SpeechProviders, create_speech_providers
 from app.speech.mock_provider import MockSpeechProvider
+from app.speech.muxlisa_provider import MuxlisaSpeechProvider
 from app.speech.yandex_provider import YandexSpeechKitProvider
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "TextToSpeechProvider",
     "TextToSpeechResult",
     "MockSpeechProvider",
+    "MuxlisaSpeechProvider",
     "YandexSpeechKitProvider",
     "create_speech_providers",
 ]
