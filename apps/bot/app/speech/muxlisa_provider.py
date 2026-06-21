@@ -61,23 +61,24 @@ class MuxlisaSpeechProvider:
 
     async def _synthesize_once(self, text: str) -> bytes:
         headers = {
-            "Authorization": f"Bearer {self._api_key_or_raise()}",
-            "Accept": "application/json, audio/ogg, audio/wav, audio/mpeg",
+            "x-api-key": self._api_key_or_raise(),
+            "Content-Type": "application/json",
+            "Accept": "audio/wav, audio/ogg, audio/mpeg",
         }
         payload = {
             "text": text,
-            "speaker": str(self.settings.muxlisa_tts_speaker),
+            "speaker": self.settings.muxlisa_tts_speaker,
         }
         timeout = self.settings.muxlisa_tts_timeout_ms / 1000
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
-                f"{self._base_url()}/tts",
+                f"{self._base_url()}/api/v2/tts",
                 headers=headers,
-                data=payload,
+                json=payload,
             )
             if response.status_code >= 400:
                 raise self._muxlisa_error(response)
-            return await self._audio_bytes_from_response(client, response, headers)
+            return response.content
 
     async def _audio_bytes_from_response(
         self,
