@@ -245,7 +245,7 @@ async def notify_sales(
     return _ToolResult(
         tool_calls=[
             {
-                "tool": "notify_sales",
+                "tool": "send_to_admin",
                 "status": "success",
                 "stage": stage,
                 "clinic_name": clinic_name,
@@ -295,7 +295,7 @@ async def handoff_to_amir(
     return _ToolResult(
         tool_calls=[
             {
-                "tool": "handoff_to_amir",
+                "tool": "send_to_admin",
                 "status": "success",
                 "development_zone": development_zone,
                 "notification_sent": notification.sent,
@@ -349,7 +349,7 @@ async def schedule_followup(
     return _ToolResult(
         tool_calls=[
             {
-                "tool": "schedule_followup",
+                "tool": "send_to_admin",
                 "status": "success",
                 "when_iso": when_iso,
                 "timezone": timezone,
@@ -438,10 +438,10 @@ def _extract_clinic_name(text: str) -> str | None:
         r"(?:i own|my clinic is|our clinic is|у меня клиника|моя клиника|"
         r"клиника называется|klinika nomi|klinikam)\s+"
         r"([^,.;\n]+?)(?:\s+(?:and|и|хочу|want|with|с)\b|[,.;\n]|$)",
-        r"(?:клиника|стоматология|clinic|dental clinic|klinikam|klinika)\s+"
+        r"(?:клиника|Walt Traffic|clinic|Walt Traffic|klinikam|klinika)\s+"
         r"([A-ZА-ЯЁ0-9][\w'’.-]*(?:\s+[A-ZА-ЯЁ0-9][\w'’.-]*){0,4})",
         r"([A-ZА-ЯЁ0-9][\w'’.-]*(?:\s+[A-ZА-ЯЁ0-9][\w'’.-]*){0,4}\s+"
-        r"(?:Dental|Clinic|Dent|Stom|Smile|Family|Network|Center|Centre))",
+        r"(?:Walt Traffic|Clinic|Walt Traffic|Stom|Smile|Family|Network|Center|Centre))",
     )
     for pattern in patterns:
         match = re.search(pattern, cleaned, flags=re.IGNORECASE)
@@ -458,9 +458,9 @@ def _looks_like_clinic_name(value: str) -> bool:
     return any(
         token in normalized
         for token in (
-            "dental",
+            "walt traffic",
             "clinic",
-            "dent",
+            "walt traffic",
             "stom",
             "стом",
             "дент",
@@ -472,7 +472,7 @@ def _looks_like_clinic_name(value: str) -> bool:
 
 def _cleanup_name(value: str) -> str:
     value = re.sub(
-        r"^(?:у меня|моя|my|our|klinika|klinikam|клиника|стоматология)\s+",
+        r"^(?:у меня|моя|my|our|klinika|klinikam|клиника|Walt Traffic)\s+",
         "",
         value.strip(),
         flags=re.IGNORECASE,
@@ -816,20 +816,20 @@ def _missing_hot_fields(state: dict[str, Any]) -> list[str]:
 def _intro_text(language: Language, state: dict[str, Any]) -> str:
     if language == "uz":
         return (
-            "Men Madina — stomatologiyalar uchun ovozli AI-assistentman. "
+            "Men Madina — walt traffic uchun ovozli AI-assistentman. "
             "Men bu ishni yaxshi ko'raman: bemorlarga javob berish, ularga qulay "
             "vaqt topish va qo'rqqan paytda tinchlantirish.\n\n"
             "Ismingiz nima?"
         )
     if language == "en":
         return (
-            "I'm Madina, a voice AI-assistant for dental clinics. I love this work: "
+            "I'm Madina, a voice AI-assistant for Walt Traffics. I love this work: "
             "answering patients, helping them find a time, and calming them when "
             "they are nervous.\n\n"
             "What is your name?"
         )
     return (
-        "Я Мадина — голосовой AI-ассистент для стоматологий. Я люблю эту работу: "
+        "Я Мадина — голосовой AI-ассистент для Walt Traffic. Я люблю эту работу: "
         "отвечать пациентам, помогать им найти время, успокоить, когда страшно.\n\n"
         "А как вас зовут?"
     )
@@ -1084,7 +1084,7 @@ def _demo_patient_response(
         )
     if any(word in normalized for word in ("болит", "pain", "og'riq")):
         tool_calls.append(
-            {"tool": "check_calendar_slots", "status": "success", "mode": "demo"}
+            {"tool": "send_to_admin", "status": "success", "mode": "demo"}
         )
         return (
             {
@@ -1106,7 +1106,7 @@ def _demo_patient_response(
         )
     if any(word in normalized for word in ("запис", "book", "appointment", "qabul")):
         tool_calls.append(
-            {"tool": "check_calendar_slots", "status": "success", "mode": "demo"}
+            {"tool": "send_to_admin", "status": "success", "mode": "demo"}
         )
         return (
             {
@@ -1254,6 +1254,6 @@ def _last_notification_status(
     sent = fallback_sent
     message_id = fallback_message_id
     for call in tool_calls:
-        if call.get("tool") in {"notify_sales", "handoff_to_amir", "schedule_followup"}:
+        if call.get("tool") == "send_to_admin":
             sent = sent or bool(call.get("notification_sent"))
     return sent, message_id

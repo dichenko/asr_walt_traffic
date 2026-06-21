@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     app_env: Literal["dev", "test", "prod"] = "dev"
     app_base_url: str = "http://localhost:8000"
     app_timezone: str = "Asia/Tashkent"
-    speech_temp_dir: str = "/tmp/dental-bot-audio"
+    speech_temp_dir: str = "/tmp/walt-traffic-audio"
 
     telegram_bot_token: SecretStr | None = None
     telegram_webhook_secret: SecretStr | None = None
@@ -31,13 +31,13 @@ class Settings(BaseSettings):
     telegram_oidc_redirect_uri: str = ""
     telegram_admin_ids: str = ""
     session_secret: str = ""
-    session_cookie_name: str = "uz_stomatolog_admin_session"
+    session_cookie_name: str = "walt_traffic_admin_session"
     session_cookie_max_age_days: int = 30
 
     postgres_host: str = "postgres"
     postgres_port: int = 5432
-    postgres_db: str = "dental_bot"
-    postgres_user: str = "dental_bot"
+    postgres_db: str = "walt_traffic"
+    postgres_user: str = "walt_traffic"
     postgres_password: SecretStr | None = None
 
     @computed_field
@@ -122,17 +122,14 @@ class Settings(BaseSettings):
     azure_tts_timeout_ms: int = 60000
     azure_tts_max_chars: int = 5000
 
-    google_calendar_id: str | None = None
-    google_service_account_json_path: str = "/run/secrets/google_service_account.json"
-
     langsmith_tracing: bool = False
     langsmith_api_key: SecretStr | None = None
     langsmith_endpoint: str = "https://api.smith.langchain.com"
-    langsmith_project: str = "dental-telegram-mvp"
+    langsmith_project: str = "walt-traffic"
 
     otel_enabled: bool = False
     otel_exporter_otlp_endpoint: str | None = None
-    otel_service_name: str = "dental-telegram-bot"
+    otel_service_name: str = "walt-traffic-bot"
 
 
 @lru_cache

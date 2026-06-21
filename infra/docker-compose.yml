@@ -1,7 +1,8 @@
-name: dental-bot
+name: walt_traffic
 
 services:
   bot:
+    container_name: walt_traffic_bot
     build:
       context: ../apps/bot
       dockerfile: Dockerfile
@@ -13,14 +14,13 @@ services:
       POSTGRES_PORT: 5432
     ports:
       - "127.0.0.1:8000:8000"
-    volumes:
-      - /run/secrets/google_service_account.json:/run/secrets/google_service_account.json:ro
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
 
   postgres:
+    container_name: walt_traffic_postgres
     image: postgres:16-alpine
     env_file:
       - path: ../.env
@@ -37,4 +37,4 @@ services:
 volumes:
   postgres_data:
     external: true
-    name: infra_postgres_data
+    name: walt_traffic_postgres_data

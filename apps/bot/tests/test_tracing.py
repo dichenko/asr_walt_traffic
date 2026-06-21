@@ -47,7 +47,7 @@ def test_tracing_configures_langsmith_env_vars():
             langsmith_tracing=True,
             langsmith_api_key=SimpleNamespace(get_secret_value=lambda: "ls__test"),
             langsmith_endpoint="https://api.smith.langchain.com",
-            langsmith_project="dental-test",
+            langsmith_project="walt traffic-test",
             otel_enabled=False,
             otel_exporter_otlp_endpoint=None,
             otel_service_name="test-service",
@@ -56,7 +56,7 @@ def test_tracing_configures_langsmith_env_vars():
 
         assert os.environ.get("LANGSMITH_TRACING") == "true"
         assert os.environ.get("LANGSMITH_API_KEY") == "ls__test"
-        assert os.environ.get("LANGSMITH_PROJECT") == "dental-test"
+        assert os.environ.get("LANGSMITH_PROJECT") == "walt traffic-test"
     finally:
         os.environ.clear()
         os.environ.update(env_before)
@@ -79,11 +79,11 @@ def test_tracing_configures_otel_env_vars():
             langsmith_project="test-project",
             otel_enabled=True,
             otel_exporter_otlp_endpoint="http://localhost:4317",
-            otel_service_name="dental-test",
+            otel_service_name="walt traffic-test",
         )
         configure_tracing(settings)
 
-        assert os.environ.get("OTEL_SERVICE_NAME") == "dental-test"
+        assert os.environ.get("OTEL_SERVICE_NAME") == "walt traffic-test"
         assert os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") == (
             "http://localhost:4317"
         )

@@ -1,4 +1,3 @@
-from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from sqlalchemy import select
@@ -6,7 +5,6 @@ from sqlalchemy import select
 from app.config import Settings
 from app.db.models import Escalation, ExecutionRun
 from app.db.repositories import (
-    AppointmentRepository,
     ConversationRepository,
     MessageRepository,
     UserRepository,
@@ -146,10 +144,12 @@ async def test_graph_starts_booking_controlled_flow(session):
     )
 
     assert result.intent == "book_appointment"
-    assert result.metadata["service_type"] == "cleaning"
-    assert result.metadata["doctor_type"] == "therapist"
-    assert result.metadata["missing_fields"] == ["patient_name", "phone"]
-    assert "patient" in result.final_response_text.casefold()
+    assert result.should_escalate is True
+    assert result.metadata["escalation_reason"] == "book_appointment"
+    assert any(
+        call["tool"] == "send_to_admin"
+        for call in result.metadata["tool_calls"]
+    )
 
 
 async def test_graph_owner_sales_warm_lead_notifies_admin(session, monkeypatch):
@@ -174,7 +174,7 @@ async def test_graph_owner_sales_warm_lead_notifies_admin(session, monkeypatch):
         conversation=conversation,
         trace_id="graph-trace-owner-warm",
         telegram_chat_id=1020,
-        input_text="I own Beverly Dental and want to see how you work",
+        input_text="I own Beverly Walt Traffic and want to see how you work",
         input_type="text",
         preferred_language="en",
         telegram_profile={},
@@ -182,15 +182,15 @@ async def test_graph_owner_sales_warm_lead_notifies_admin(session, monkeypatch):
     )
 
     assert result.intent == "owner_sales"
-    assert result.metadata["owner_clinic_name"] == "Beverly Dental"
+    assert result.metadata["owner_clinic_name"] == "Beverly Walt Traffic"
     assert result.metadata["owner_sales_stage"] == "demo_intro"
     assert conversation.current_flow == "owner_sales"
     assert len(admin_bot.messages) >= 1
     assert "Sales lead" in admin_bot.messages[0]["text"]
     admin_text = "\n".join(message["text"] for message in admin_bot.messages)
-    assert "Beverly Dental" in admin_text
+    assert "Beverly Walt Traffic" in admin_text
     assert any(
-        call["tool"] == "notify_sales" and call["stage"] == "warm"
+        call["tool"] == "send_to_admin" and call["stage"] == "warm"
         for call in result.metadata["tool_calls"]
     )
 
@@ -218,7 +218,7 @@ async def test_graph_owner_sales_hot_lead_persists_and_notifies(session, monkeyp
         trace_id="graph-trace-owner-hot",
         telegram_chat_id=1021,
         input_text=(
-            "I want to connect you. My name is Alisher, Beverly Dental, "
+            "I want to connect you. My name is Alisher, Beverly Walt Traffic, "
             "2 locations, phone +998 90 555 12 34"
         ),
         input_type="text",
@@ -233,19 +233,19 @@ async def test_graph_owner_sales_hot_lead_persists_and_notifies(session, monkeyp
     assert result.intent == "owner_sales"
     assert result.metadata["owner_sales_stage"] == "hot"
     assert result.metadata["owner_name"] == "Alisher"
-    assert result.metadata["owner_clinic_name"] == "Beverly Dental"
+    assert result.metadata["owner_clinic_name"] == "Beverly Walt Traffic"
     assert result.metadata["owner_locations"] == 2
     assert result.metadata["owner_phone"] == "+998905551234"
     assert result.metadata["admin_notification_sent"] is True
     assert "sales_hot" in reasons
     assert "Ivan" in result.final_response_text
     assert any(
-        call["tool"] == "notify_sales" and call["stage"] == "hot"
+        call["tool"] == "send_to_admin" and call["stage"] == "hot"
         for call in result.metadata["tool_calls"]
     )
 
 
-async def test_graph_lists_user_appointments_by_telegram_user(session):
+async def test_graph_sends_existing_appointment_requests_to_admin(session):
     user = await UserRepository(session).upsert_from_telegram(
         telegram_user_id=1010,
         preferred_language="ru",
@@ -260,17 +260,6 @@ async def test_graph_lists_user_appointments_by_telegram_user(session):
         current_state="collecting_patient",
         summary='{"service_type": "cleaning"}',
     )
-    start_at = datetime.now(UTC) + timedelta(days=2)
-    appointment = await AppointmentRepository(session).create(
-        user_id=user.id,
-        service_type="cleaning",
-        doctor_type="therapist",
-        start_at=start_at,
-        end_at=start_at + timedelta(minutes=60),
-        patient_name="Михаил",
-        primary_phone="+998901234567",
-    )
-
     result = await run_bot_graph(
         session=session,
         user=user,
@@ -284,8 +273,9 @@ async def test_graph_lists_user_appointments_by_telegram_user(session):
     )
 
     assert result.intent == "view_appointments"
-    assert result.metadata["active_appointments"][0]["id"] == appointment.id
-    assert "Ваши активные записи" in result.final_response_text
+    assert result.should_escalate is True
+    assert result.metadata["escalation_reason"] == "view_appointments"
+    assert result.metadata["active_appointments"] == []
     assert conversation.current_flow is None
 
 
@@ -368,7 +358,7 @@ async def test_graph_creates_escalation_and_notifies_admin_for_emergency(
     assert escalation.admin_chat_id == "-100123"
     assert escalation.admin_message_id == 777
     assert admin_bot.messages[0]["chat_id"] == "-100123"
-    assert "Escalation required" in admin_bot.messages[0]["text"]
+    assert "Admin request" in admin_bot.messages[0]["text"]
 
 
 async def test_graph_escalates_unknown_faq_without_admin_bot(session, monkeypatch):

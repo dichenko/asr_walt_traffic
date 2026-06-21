@@ -293,7 +293,7 @@ def _valid_intents() -> set[str]:
 
 def _intent_router_system_prompt() -> str:
     return (
-        "You are an intent router for a dental clinic Telegram assistant. "
+        "You are an intent router for a Walt Traffic Telegram assistant. "
         "Return only JSON with keys: intent, confidence, reason. "
         "Allowed intents: admin_faq, view_appointments, book_appointment, "
         "cancel_appointment, reschedule_appointment, medical_question, emergency, "

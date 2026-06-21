@@ -1,7 +1,7 @@
 # Copy this to /etc/caddy/Caddyfile or your Caddy config directory.
 # Replace domains with actual ones. After saving, run: caddy reload
 
-uz-stomatolog.liven8n.site {
+walt-traffic.liven8n.site {
     reverse_proxy 127.0.0.1:8000
 
     header {
@@ -11,11 +11,11 @@ uz-stomatolog.liven8n.site {
     }
 
     log {
-        output file /var/log/caddy/uz-stomatolog-access.log
+        output file /var/log/caddy/walt-traffic-access.log
     }
 }
 
-admin-uz-stomatolog.liven8n.site {
+admin-walt-traffic.liven8n.site {
     reverse_proxy 127.0.0.1:8000
 
     header {
@@ -25,6 +25,6 @@ admin-uz-stomatolog.liven8n.site {
     }
 
     log {
-        output file /var/log/caddy/admin-uz-stomatolog-access.log
+        output file /var/log/caddy/admin-walt-traffic-access.log
     }
 }

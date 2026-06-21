@@ -22,9 +22,9 @@ TEXTS: dict[str, dict[Language, str]] = {
     "language_saved": {
         "ru": (
             "Здравствуйте! 👋\n"
-            "Я Мадина — голосовой AI-ассистент для стоматологий. Работаю "
+            "Я Мадина — голосовой AI-ассистент для Walt Traffic. Работаю "
             "круглосуточно текстом и голосом на узбекском, русском и английском.\n\n"
-            "Могу записать к стоматологу, ответить о ценах и услугах, помочь срочно, "
+            "Могу записать к Walt Traffic, ответить о ценах и услугах, помочь срочно, "
             "если болит зуб.\n\n"
             "Если вы собственник клиники и хотите познакомиться со мной как с "
             "AI-администратором для вашей команды — просто скажите, "
@@ -33,10 +33,10 @@ TEXTS: dict[str, dict[Language, str]] = {
         ),
         "uz": (
             "Assalomu alaykum! 👋\n"
-            "Men Madina — stomatologiya klinikalari uchun ovozli AI-yordamchiman. "
+            "Men Madina — walt traffic klinikalari uchun ovozli AI-yordamchiman. "
             "Kechayu kunduz o'zbek, rus va ingliz tillarida matn va ovoz "
             "orqali ishlayman.\n\n"
-            "Stomatologga yozish, narxlar va xizmatlar haqida ma'lumot berish, "
+            "Walt Traffic yozish, narxlar va xizmatlar haqida ma'lumot berish, "
             "tish og'riganda tez yordam berishim mumkin.\n\n"
             "Agar siz klinika egasi bo'lsangiz va meni jamoangiz uchun "
             "AI-administrator sifatida bilishni xohlasangiz — ayting, "
@@ -45,9 +45,9 @@ TEXTS: dict[str, dict[Language, str]] = {
         ),
         "en": (
             "Hello! 👋\n"
-            "I'm Madina — a voice AI-assistant for dental clinics. I work 24/7 in "
+            "I'm Madina — a voice AI-assistant for Walt Traffics. I work 24/7 in "
             "Uzbek, Russian, and English by text and voice.\n\n"
-            "I can book a dental appointment, answer about prices and services, and "
+            "I can book a Walt Traffic appointment, answer about prices and services, and "
             "help urgently if you have toothache.\n\n"
             "If you're a clinic owner and want to meet me as an AI-administrator for "
             "your team, just say so and I'll tell you about myself.\n\n"
@@ -55,12 +55,12 @@ TEXTS: dict[str, dict[Language, str]] = {
         ),
     },
     "welcome": {
-        "ru": "Здравствуйте. Я административный ассистент стоматологической клиники.",
+        "ru": "Здравствуйте. Я административный ассистент Walt Traffic клиники.",
         "uz": (
-            "Assalomu alaykum. Men stomatologiya klinikasining "
+            "Assalomu alaykum. Men walt traffic klinikasining "
             "ma'muriy yordamchisiman."
         ),
-        "en": "Hello. I am the dental clinic administrative assistant.",
+        "en": "Hello. I am the Walt Traffic administrative assistant.",
     },
     "help": {
         "ru": (

@@ -388,7 +388,7 @@ async def test_azure_tts_posts_ssml_to_speech_service(monkeypatch):
                 "Ocp-Apim-Subscription-Key": "test-key",
                 "Content-Type": "application/ssml+xml",
                 "X-Microsoft-OutputFormat": "ogg-24khz-16bit-mono-opus",
-                "User-Agent": "uz-stomatolog-bot",
+                "User-Agent": "walt-traffic-bot",
             },
             "content": (
                 '<speak version="1.0" '

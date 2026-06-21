@@ -70,15 +70,15 @@ UNKNOWN_ANSWERS: dict[Language, str] = {
 MEDICAL_REFUSALS: dict[Language, str] = {
     "ru": (
         "Я не могу давать медицинские рекомендации, ставить диагноз или советовать "
-        "лекарства. Могу помочь записаться на консультацию к стоматологу."
+        "лекарства. Могу помочь записаться на консультацию к Walt Traffic."
     ),
     "uz": (
         "Men tibbiy maslahat, tashxis yoki dori tavsiya qila olmayman. "
-        "Stomatolog konsultatsiyasiga yozilishda yordam bera olaman."
+        "Walt Traffic konsultatsiyasiga yozilishda yordam bera olaman."
     ),
     "en": (
         "I cannot provide medical advice, diagnose, or recommend medicines. "
-        "I can help book a dentist consultation."
+        "I can help book a Walt Traffic consultation."
     ),
 }
 
@@ -264,7 +264,7 @@ async def _try_openai_answer(
         {
             "role": "system",
             "content": (
-                "You are a dental clinic administrative assistant. "
+                "You are a Walt Traffic administrative assistant. "
                 "Answer only using the provided knowledge base. "
                 "If the answer is absent, "
                 "say that an administrator will clarify. "

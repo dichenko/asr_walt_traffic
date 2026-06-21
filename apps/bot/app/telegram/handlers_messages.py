@@ -25,11 +25,7 @@ from app.speech.temp_files import (
     validate_file_size,
 )
 from app.telegram.keyboards import (
-    booking_slots_keyboard,
-    cancel_appointments_keyboard,
-    contact_request_keyboard,
     language_keyboard,
-    reschedule_appointments_keyboard,
 )
 from app.telegram.persistence import save_outgoing_message
 from app.telegram.texts import normalize_language, text
@@ -495,16 +491,6 @@ async def _send_and_save_text(
 
 
 def _reply_markup_for_graph_result(graph_result: GraphResult, language: str):
-    missing_fields = graph_result.metadata.get("missing_fields") or []
-    active_appointments = graph_result.metadata.get("active_appointments") or []
-    if graph_result.proposed_slots:
-        return booking_slots_keyboard(graph_result.proposed_slots)
-    if graph_result.intent == "cancel_appointment" and active_appointments:
-        return cancel_appointments_keyboard(active_appointments)
-    if graph_result.intent == "reschedule_appointment" and active_appointments:
-        return reschedule_appointments_keyboard(active_appointments)
-    if graph_result.intent == "book_appointment" and "phone" in missing_fields:
-        return contact_request_keyboard(language)
     return None
 
 

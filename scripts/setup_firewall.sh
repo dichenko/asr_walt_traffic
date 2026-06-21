@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Firewall setup for dental-bot on VPS
+# Firewall setup for walt-traffic on VPS
 # Run: sudo sh scripts/setup_firewall.sh
 
 set -eu

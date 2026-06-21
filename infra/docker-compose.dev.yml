@@ -1,5 +1,6 @@
 services:
   pgadmin:
+    container_name: walt_traffic_pgadmin
     image: dpage/pgadmin4:8
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com

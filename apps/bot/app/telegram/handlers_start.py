@@ -8,7 +8,6 @@ from app.admin.one_time_links import create_admin_one_time_login_link
 from app.config import get_settings
 from app.db.models import Conversation, User
 from app.db.repositories import (
-    AppointmentRepository,
     ConversationRepository,
     ExecutionRunRepository,
     MessageRepository,
@@ -200,37 +199,3 @@ async def reset_user_dialog_history(
     conversation.current_state = None
     conversation.summary = None
 
-
-@router.message(Command("my_appointments"))
-async def my_appointments_handler(
-    message: Message,
-    db_session: AsyncSession,
-    db_user: User,
-    db_conversation: Conversation,
-    trace_id: str,
-) -> None:
-    language = normalize_language(db_user.preferred_language)
-    appointments = await AppointmentRepository(db_session).get_active_future_by_user(
-        user_id=db_user.id
-    )
-    if not appointments:
-        response_text = text("appointments_empty", language)
-    else:
-        lines = [text("appointments_header", language)]
-        for appointment in appointments:
-            start = appointment.start_at.strftime("%Y-%m-%d %H:%M")
-            lines.append(
-                f"- {start}: {appointment.service_type}, {appointment.doctor_type}"
-            )
-        response_text = "\n".join(lines)
-
-    sent = await message.answer(response_text)
-    await save_outgoing_message(
-        session=db_session,
-        user=db_user,
-        conversation=db_conversation,
-        telegram_message_id=sent.message_id,
-        text=response_text,
-        language=language,
-        trace_id=trace_id,
-    )

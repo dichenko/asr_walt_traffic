@@ -1,1 +1,1 @@
-"""Dental clinic Telegram assistant bot package."""
+"""Walt Traffic Telegram assistant bot package."""

@@ -696,7 +696,7 @@ def _render_login_page() -> str:
         body="""
         <main class="content">
             <div class="card login-card">
-                <h2>uz-stomatolog Admin</h2>
+                <h2>walt-traffic Admin</h2>
                 <a href="/admin/auth/telegram/start" class="tg-btn">Войти через Telegram</a>
             </div>
         </main>
@@ -1154,7 +1154,7 @@ def _base_html(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title} – uz-stomatolog Admin</title>
+<title>{title} – walt-traffic Admin</title>
 {extra_head}
 <style>
   :root {{

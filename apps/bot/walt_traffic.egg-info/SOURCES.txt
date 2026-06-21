@@ -71,11 +71,11 @@ app/telegram/webhook.py
 app/workers/__init__.py
 app/workers/calendar_sync_worker.py
 app/workers/reminder_worker.py
-dental_bot.egg-info/PKG-INFO
-dental_bot.egg-info/SOURCES.txt
-dental_bot.egg-info/dependency_links.txt
-dental_bot.egg-info/requires.txt
-dental_bot.egg-info/top_level.txt
+walt_traffic.egg-info/PKG-INFO
+walt_traffic.egg-info/SOURCES.txt
+walt_traffic.egg-info/dependency_links.txt
+walt_traffic.egg-info/requires.txt
+walt_traffic.egg-info/top_level.txt
 tests/test_admin_history.py
 tests/test_admin_notify.py
 tests/test_booking_flow.py

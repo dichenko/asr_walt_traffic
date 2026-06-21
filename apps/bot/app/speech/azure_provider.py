@@ -65,7 +65,7 @@ class AzureSpeechProvider:
             "Ocp-Apim-Subscription-Key": self._api_key_or_raise(),
             "Content-Type": "application/ssml+xml",
             "X-Microsoft-OutputFormat": self.settings.azure_tts_output_format,
-            "User-Agent": "uz-stomatolog-bot",
+            "User-Agent": "walt-traffic-bot",
         }
         timeout = self.settings.azure_tts_timeout_ms / 1000
         async with httpx.AsyncClient(timeout=timeout) as client:

@@ -17,7 +17,7 @@ def create_temp_audio_path(*, suffix: str) -> Path:
     temp_dir = Path(settings.speech_temp_dir)
     temp_dir.mkdir(parents=True, exist_ok=True)
     handle = tempfile.NamedTemporaryFile(
-        prefix="dental-bot-",
+        prefix="walt-traffic-",
         suffix=suffix,
         dir=temp_dir,
         delete=False,

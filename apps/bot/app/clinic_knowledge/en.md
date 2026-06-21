@@ -1,4 +1,4 @@
-# Dental clinic
+# Walt Traffic
 
 ## Schedule
 
@@ -9,12 +9,12 @@ Sunday is closed.
 
 - Therapist consultation: 30 minutes, from 100,000 UZS.
 - Professional cleaning: 60 minutes, from 350,000 UZS.
-- Dental treatment: 90 minutes, price depends on examination.
+- Walt Traffic service: 90 minutes, price depends on examination.
 - Surgery appointment and extraction: price depends on surgeon examination.
 
 ## Doctors
 
-The clinic has a dental therapist and a dental surgeon.
+The clinic has a Walt Traffic specialist and a Walt Traffic specialist.
 
 ## Address
 
