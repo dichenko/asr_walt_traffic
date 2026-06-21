@@ -40,6 +40,7 @@ async def lifespan(fastapi_app: FastAPI) -> AsyncIterator[None]:
             "telegram_webhook_path": settings.telegram_webhook_path,
         },
     )
+    logger.info("ci_cd_pipeline_test_ok")
     try:
         async with async_session_factory() as session:
             await ensure_llm_provider_defaults(session, settings=settings)
