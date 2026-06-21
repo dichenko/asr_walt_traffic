@@ -3,6 +3,8 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.telegram.handlers_messages import answer_safe
+
 from app.admin.auth import is_admin
 from app.admin.one_time_links import create_admin_one_time_login_link
 from app.config import get_settings
@@ -35,7 +37,7 @@ async def start_handler(
     )
     language = normalize_language(db_user.preferred_language)
     response_text = text("choose_language", language)
-    sent = await message.answer(response_text, reply_markup=language_keyboard())
+    sent = await answer_safe(message, response_text, reply_markup=language_keyboard())
     await save_outgoing_message(
         session=db_session,
         user=db_user,
@@ -58,7 +60,7 @@ async def language_handler(
 ) -> None:
     language = normalize_language(db_user.preferred_language)
     response_text = text("choose_language", language)
-    sent = await message.answer(response_text, reply_markup=language_keyboard())
+    sent = await answer_safe(message, response_text, reply_markup=language_keyboard())
     await save_outgoing_message(
         session=db_session,
         user=db_user,
@@ -94,7 +96,7 @@ async def admin_handler(
         response_text = _admin_one_time_link_text(admin_url, language)
         stored_text = _admin_one_time_link_text("[redacted]", language)
 
-    sent = await message.answer(response_text)
+    sent = await answer_safe(message, response_text)
     await save_outgoing_message(
         session=db_session,
         user=db_user,
@@ -121,7 +123,7 @@ async def restart_handler(
         conversation=db_conversation,
     )
     response_text = text("choose_language")
-    sent = await message.answer(response_text, reply_markup=language_keyboard())
+    sent = await answer_safe(message, response_text, reply_markup=language_keyboard())
     await save_outgoing_message(
         session=db_session,
         user=db_user,
@@ -144,7 +146,7 @@ async def help_handler(
 ) -> None:
     language = normalize_language(db_user.preferred_language)
     response_text = text("help", language)
-    sent = await message.answer(response_text)
+    sent = await answer_safe(message, response_text)
     await save_outgoing_message(
         session=db_session,
         user=db_user,

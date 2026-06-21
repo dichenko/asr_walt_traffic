@@ -2,6 +2,8 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.telegram.handlers_messages import answer_safe
+
 from app.admin.settings_reader import get_welcome_message
 from app.db.models import Conversation, User
 from app.db.repositories import UserRepository
@@ -41,7 +43,7 @@ async def language_callback_handler(
         else text("language_saved", language)
     )
     if isinstance(callback.message, Message):
-        sent = await callback.message.answer(response_text)
+        sent = await answer_safe(callback.message, response_text)
         await save_outgoing_message(
             session=db_session,
             user=db_user,

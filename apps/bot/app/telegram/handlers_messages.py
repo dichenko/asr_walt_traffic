@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile, Message
 from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +46,7 @@ async def fallback_text_handler(
 ) -> None:
     if db_user.preferred_language is None:
         response_text = text("language_required")
-        sent = await message.answer(response_text, reply_markup=language_keyboard())
+        sent = await answer_safe(message, response_text, reply_markup=language_keyboard())
         await save_outgoing_message(
             session=db_session,
             user=db_user,
@@ -74,7 +75,7 @@ async def fallback_text_handler(
     if not isinstance(response_text, str) or not response_text.strip():
         response_text = "Извините, произошла ошибка. Попробуйте ещё раз."
     reply_markup = _reply_markup_for_graph_result(graph_result, language)
-    sent = await message.answer(response_text, reply_markup=reply_markup)
+    sent = await answer_safe(message, response_text, reply_markup=reply_markup)
     await save_outgoing_message(
         session=db_session,
         user=db_user,
@@ -102,7 +103,7 @@ async def contact_handler(
 ) -> None:
     if db_user.preferred_language is None:
         response_text = text("language_required")
-        sent = await message.answer(response_text, reply_markup=language_keyboard())
+        sent = await answer_safe(message, response_text, reply_markup=language_keyboard())
         await save_outgoing_message(
             session=db_session,
             user=db_user,
@@ -132,7 +133,8 @@ async def contact_handler(
     if not isinstance(response_text, str) or not response_text.strip():
         response_text = "Извините, произошла ошибка. Попробуйте ещё раз."
     reply_markup = _reply_markup_for_graph_result(graph_result, language)
-    sent = await message.answer(
+    sent = await answer_safe(
+        message,
         response_text,
         reply_markup=reply_markup,
     )
@@ -164,7 +166,7 @@ async def voice_handler(
 ) -> None:
     if db_user.preferred_language is None:
         response_text = text("language_required")
-        sent = await message.answer(response_text, reply_markup=language_keyboard())
+        sent = await answer_safe(message, response_text, reply_markup=language_keyboard())
         await save_outgoing_message(
             session=db_session,
             user=db_user,
@@ -259,7 +261,7 @@ async def voice_handler(
         if not isinstance(response_text, str) or not response_text.strip():
             response_text = "Извините, произошла ошибка. Попробуйте ещё раз."
         reply_markup = _reply_markup_for_graph_result(graph_result, language)
-        sent = await message.answer(response_text, reply_markup=reply_markup)
+        sent = await answer_safe(message, response_text, reply_markup=reply_markup)
         await save_outgoing_message(
             session=db_session,
             user=db_user,
@@ -477,7 +479,7 @@ async def _send_and_save_text(
     language: str | None,
     raw_payload: dict,
 ) -> None:
-    sent = await message.answer(response_text)
+    sent = await answer_safe(message, response_text)
     await save_outgoing_message(
         session=db_session,
         user=db_user,
@@ -522,3 +524,11 @@ async def _ensure_ogg(file_path: str) -> Path:
         error_text = stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(f"ffmpeg ogg conversion failed: {error_text}")
     return output_path
+
+
+async def answer_safe(message: Message, text: str, **kwargs) -> Message:
+    try:
+        return await message.answer(text, parse_mode="Markdown", **kwargs)
+    except TelegramBadRequest:
+        logger.warning("markdown_parse_failed_falling_back_to_plain", extra={"text": text[:200]})
+        return await message.answer(text, parse_mode=None, **kwargs)
