@@ -812,7 +812,7 @@ def _render_history_page() -> str:
             scrollX: true,
             pageLength: 10,
             lengthMenu: [[10, 20, 50, 100], [10, 20, 50, 100]],
-            order: [[0, 'desc']],
+            order: [[0, 'desc'], [1, 'desc']],
             ajax: {
                 url: '/admin/api/history',
                 data: function (d) {

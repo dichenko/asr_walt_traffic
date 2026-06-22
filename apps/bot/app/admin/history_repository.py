@@ -462,6 +462,8 @@ def _sort_rows(
     sort_dir: Literal["asc", "desc"],
 ) -> list[HistoryRow]:
     reverse = sort_dir == "desc"
+    if sort_field in ("date", "time"):
+        return sorted(rows, key=lambda row: row.created_at, reverse=reverse)
     return sorted(rows, key=lambda row: getattr(row, sort_field), reverse=reverse)
 
 

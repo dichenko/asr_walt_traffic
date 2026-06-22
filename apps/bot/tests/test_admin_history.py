@@ -90,6 +90,47 @@ async def test_history_page_returns_all_chat_messages(session):
     assert time_filtered.filtered == 1
 
 
+async def test_history_defaults_to_newest_messages_first(session):
+    user = await UserRepository(session).upsert_from_telegram(
+        telegram_user_id=9003,
+        preferred_language="ru",
+    )
+    conversation = await ConversationRepository(session).get_or_create(
+        user_id=user.id,
+        telegram_chat_id=9003,
+    )
+    messages = MessageRepository(session)
+    older = await messages.save_message(
+        user_id=user.id,
+        conversation_id=conversation.id,
+        telegram_message_id=20,
+        direction="in",
+        message_type="text",
+        language="ru",
+        text="Старое сообщение",
+        trace_id="history-trace-old",
+    )
+    older.created_at = datetime(2026, 5, 20, 9, 0, tzinfo=UTC)
+    newer = await messages.save_message(
+        user_id=user.id,
+        conversation_id=conversation.id,
+        telegram_message_id=21,
+        direction="in",
+        message_type="text",
+        language="ru",
+        text="Новое сообщение",
+        trace_id="history-trace-new",
+    )
+    newer.created_at = datetime(2026, 5, 20, 18, 0, tzinfo=UTC)
+
+    page = await MessageHistoryRepository(session).fetch_page(HistoryQuery())
+
+    assert [row.user_text for row in page.rows] == [
+        "Новое сообщение",
+        "Старое сообщение",
+    ]
+
+
 async def test_history_filters_by_message_type_and_agent_action(session):
     user = await UserRepository(session).upsert_from_telegram(
         telegram_user_id=9002,
