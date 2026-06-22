@@ -179,6 +179,7 @@ def build_chat_model(
         return ChatMistralAI(
             model=config.model_id,
             api_key=config.api_key,
+            base_url=_mistral_langchain_base_url(resolved),
             temperature=0,
             timeout=resolved.mistral_timeout_ms / 1000,
             max_retries=0,
@@ -640,6 +641,13 @@ def _anthropic_usage(data: dict[str, Any]) -> dict[str, int | None] | None:
 
 def _elapsed_ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
+
+
+def _mistral_langchain_base_url(settings: Settings) -> str:
+    base_url = settings.mistral_base_url.rstrip("/")
+    if base_url.endswith("/v1"):
+        return base_url
+    return f"{base_url}/v1"
 
 
 def _side_effect_seen(tracker: dict[str, Any] | None) -> bool:

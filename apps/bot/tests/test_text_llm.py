@@ -3,9 +3,14 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.llm.crypto import decrypt_api_key, encrypt_api_key, mask_api_key
-from app.llm.manager import LlmProviderError, complete_text_with_fallback
+from app.llm.manager import (
+    LlmProviderError,
+    build_chat_model,
+    complete_text_with_fallback,
+)
 from app.llm.repository import (
     LlmProviderConfigError,
+    RuntimeProviderConfig,
     ensure_llm_provider_defaults,
     get_provider_config,
     update_provider_configs,
@@ -216,3 +221,18 @@ async def test_complete_text_does_not_fallback_for_internal_request_error(
         )
 
     assert calls == ["anthropic"]
+
+
+def test_mistral_agent_model_uses_v1_endpoint():
+    model = build_chat_model(
+        RuntimeProviderConfig(
+            provider_code="mistral",
+            display_name="Mistral",
+            priority=1,
+            model_id="mistral-small-latest",
+            api_key="test-key",
+        ),
+        settings=Settings(mistral_base_url="https://api.mistral.ai"),
+    )
+
+    assert model.endpoint == "https://api.mistral.ai/v1"
