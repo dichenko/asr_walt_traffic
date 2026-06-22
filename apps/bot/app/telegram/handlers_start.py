@@ -3,8 +3,6 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.telegram.handlers_messages import answer_safe
-
 from app.admin.auth import is_admin
 from app.admin.one_time_links import create_admin_one_time_login_link
 from app.config import get_settings
@@ -15,6 +13,7 @@ from app.db.repositories import (
     MessageRepository,
     UserRepository,
 )
+from app.telegram.handlers_messages import answer_safe
 from app.telegram.keyboards import language_keyboard
 from app.telegram.persistence import save_outgoing_message
 from app.telegram.texts import normalize_language, text

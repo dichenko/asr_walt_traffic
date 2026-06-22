@@ -100,7 +100,9 @@ class MuxlisaSpeechProvider:
             try:
                 return base64.b64decode(audio_base64)
             except ValueError as exc:
-                raise SpeechProviderError("Muxlisa TTS audio is not valid base64") from exc
+                raise SpeechProviderError(
+                    "Muxlisa TTS audio is not valid base64"
+                ) from exc
 
         audio_path = _first_str(payload, "audio_path", "audio_url", "url", "file")
         if audio_path:

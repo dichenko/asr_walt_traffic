@@ -441,7 +441,8 @@ def _extract_clinic_name(text: str) -> str | None:
         r"(?:клиника|Walt Traffic|clinic|Walt Traffic|klinikam|klinika)\s+"
         r"([A-ZА-ЯЁ0-9][\w'’.-]*(?:\s+[A-ZА-ЯЁ0-9][\w'’.-]*){0,4})",
         r"([A-ZА-ЯЁ0-9][\w'’.-]*(?:\s+[A-ZА-ЯЁ0-9][\w'’.-]*){0,4}\s+"
-        r"(?:Walt Traffic|Clinic|Walt Traffic|Stom|Smile|Family|Network|Center|Centre))",
+        r"(?:Walt Traffic|Clinic|Walt Traffic|Stom|Smile|Family|Network|"
+        r"Center|Centre))",
     )
     for pattern in patterns:
         match = re.search(pattern, cleaned, flags=re.IGNORECASE)

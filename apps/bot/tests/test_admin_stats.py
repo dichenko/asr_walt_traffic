@@ -1,7 +1,11 @@
 from datetime import UTC, date, datetime, timedelta
 
 from app.admin.stats_repository import AdminStatsRepository
-from app.db.repositories import ConversationRepository, MessageRepository, UserRepository
+from app.db.repositories import (
+    ConversationRepository,
+    MessageRepository,
+    UserRepository,
+)
 
 
 async def test_admin_stats_counts_totals_and_daily_user_activity(session):

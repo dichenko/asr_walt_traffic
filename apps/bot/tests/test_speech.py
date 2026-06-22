@@ -9,8 +9,8 @@ from app.speech import MockSpeechProvider, create_speech_providers
 from app.speech.aisha_provider import AishaSpeechProvider
 from app.speech.azure_provider import AzureSpeechProvider, AzureSpeechStatusError
 from app.speech.base import SpeechProviderError
-from app.speech.openai_provider import OpenAISpeechProvider
 from app.speech.muxlisa_provider import MuxlisaSpeechProvider
+from app.speech.openai_provider import OpenAISpeechProvider
 from app.speech.temp_files import (
     cleanup_temp_file,
     create_temp_audio_path,
@@ -26,7 +26,7 @@ def test_speech_factory_routes_languages_to_expected_providers():
     providers = create_speech_providers(Settings())
 
     assert providers.stt_for_language("uz") is providers.aisha
-    assert providers.tts_for_language("uz") is providers.muxlisa
+    assert providers.tts_for_language("uz") is providers.aisha
     assert providers.stt_for_language("ru") is providers.openai
     assert providers.tts_for_language("ru") is providers.yandex
     assert providers.stt_for_language("en") is providers.openai
@@ -296,12 +296,12 @@ async def test_muxlisa_tts_posts_form_and_writes_audio(monkeypatch):
         async def __aexit__(self, *_args):
             return None
 
-        async def post(self, url, *, headers, data):
+        async def post(self, url, *, headers, json):
             calls.append(
                 {
                     "url": url,
                     "headers": headers,
-                    "data": data,
+                    "json": json,
                     "timeout": self.timeout,
                 }
             )
@@ -329,12 +329,13 @@ async def test_muxlisa_tts_posts_form_and_writes_audio(monkeypatch):
     assert result.voice == "0"
     assert calls == [
         {
-            "url": "https://service.muxlisa.uz/tts",
+            "url": "https://service.muxlisa.uz/api/v2/tts",
             "headers": {
-                "Authorization": "Bearer test-key",
-                "Accept": "application/json, audio/ogg, audio/wav, audio/mpeg",
+                "x-api-key": "test-key",
+                "Content-Type": "application/json",
+                "Accept": "audio/wav, audio/ogg, audio/mpeg",
             },
-            "data": {"text": "Salom test", "speaker": "0"},
+            "json": {"text": "Salom test", "speaker": 0},
             "timeout": 12,
         }
     ]

@@ -2,11 +2,10 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.telegram.handlers_messages import answer_safe
-
 from app.admin.settings_reader import get_welcome_message
 from app.db.models import Conversation, User
 from app.db.repositories import UserRepository
+from app.telegram.handlers_messages import answer_safe
 from app.telegram.persistence import save_outgoing_message
 from app.telegram.texts import SUPPORTED_LANGUAGES, normalize_language, text
 
