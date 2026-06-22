@@ -63,9 +63,15 @@ class Settings(BaseSettings):
     claude_text_model: str = "claude-sonnet-4-5-20250929"
     claude_timeout_ms: int = 60000
     claude_max_tokens: int = 2048
+    mistral_api_key: SecretStr | None = None
     llm_config_encryption_key: SecretStr | None = None
     mistral_base_url: str = "https://api.mistral.ai"
     mistral_timeout_ms: int = 60000
+    mistral_ocr_model: str = "mistral-ocr-latest"
+    menu_import_max_files: int = 10
+    menu_import_max_file_size_mb: int = 20
+    menu_import_max_total_size_mb: int = 50
+    menu_import_max_ocr_chars: int = 120000
     openai_stt_model: str = "gpt-4o-transcribe"
     openai_stt_language: str = "ru"
     openai_stt_response_format: str = "json"

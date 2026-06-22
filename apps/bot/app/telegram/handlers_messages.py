@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import tempfile
 from pathlib import Path
 
 from aiogram import F, Router
@@ -17,6 +18,13 @@ from app.db.repositories import MessageRepository
 from app.graph import GraphResult
 from app.graph.state import InputType
 from app.services.admin_notify import notify_dev_admin
+from app.services.menu_ocr_prompt_builder import build_menu_ocr_message
+from app.services.mistral_ocr_service import (
+    USER_NO_TEXT_MESSAGE,
+    IncomingAttachment,
+    MistralOcrService,
+    OcrBatchResult,
+)
 from app.speech import create_speech_providers
 from app.speech.base import SpeechProviderError
 from app.speech.temp_files import (
@@ -46,7 +54,11 @@ async def fallback_text_handler(
 ) -> None:
     if db_user.preferred_language is None:
         response_text = text("language_required")
-        sent = await answer_safe(message, response_text, reply_markup=language_keyboard())
+        sent = await answer_safe(
+            message,
+            response_text,
+            reply_markup=language_keyboard(),
+        )
         await save_outgoing_message(
             session=db_session,
             user=db_user,
@@ -92,6 +104,164 @@ async def fallback_text_handler(
     )
 
 
+@router.message(F.document | F.photo)
+async def menu_attachment_handler(
+    message: Message,
+    db_session: AsyncSession,
+    db_user: User,
+    db_conversation: Conversation,
+    db_incoming_message: DbMessage,
+    trace_id: str,
+) -> None:
+    if db_user.preferred_language is None:
+        response_text = text("language_required")
+        sent = await answer_safe(
+            message,
+            response_text,
+            reply_markup=language_keyboard(),
+        )
+        await save_outgoing_message(
+            session=db_session,
+            user=db_user,
+            conversation=db_conversation,
+            telegram_message_id=sent.message_id,
+            text=response_text,
+            language=None,
+            trace_id=trace_id,
+            raw_payload={"reply_markup": "language_keyboard"},
+        )
+        return
+
+    language = normalize_language(db_user.preferred_language)
+    settings = get_settings()
+    accepted_text = "Принял документы. Распознаю меню..."
+    accepted = await answer_safe(message, accepted_text)
+    await save_outgoing_message(
+        session=db_session,
+        user=db_user,
+        conversation=db_conversation,
+        telegram_message_id=accepted.message_id,
+        text=accepted_text,
+        language=language,
+        trace_id=trace_id,
+        raw_payload={"input_type": "menu_attachment", "status": "accepted"},
+    )
+
+    temp_paths: list[Path] = []
+    try:
+        attachments = await _download_menu_attachments(message)
+        temp_paths = [attachment.local_path for attachment in attachments]
+
+        batch = await MistralOcrService(settings).recognize_documents(
+            attachments,
+            trace_id=trace_id,
+            telegram_user_id=db_user.telegram_user_id,
+            telegram_chat_id=message.chat.id,
+        )
+        logger.info(
+            "menu_ocr_batch_processed",
+            extra={
+                "trace_id": trace_id,
+                "telegram_user_id": db_user.telegram_user_id,
+                "telegram_chat_id": message.chat.id,
+                "status": batch.status,
+                "documents": len(batch.documents),
+                "failures": len(batch.failures),
+            },
+        )
+
+        if not batch.has_text:
+            await _send_and_save_text(
+                message=message,
+                db_session=db_session,
+                db_user=db_user,
+                db_conversation=db_conversation,
+                trace_id=trace_id,
+                response_text=_first_failure_message(batch) or USER_NO_TEXT_MESSAGE,
+                language=language,
+                raw_payload={"input_type": "menu_attachment", "status": batch.status},
+            )
+            return
+
+        ocr_message = build_menu_ocr_message(batch.documents, settings=settings)
+        ocr_incoming_message = await MessageRepository(db_session).save_message(
+            user_id=db_user.id,
+            conversation_id=db_conversation.id,
+            telegram_message_id=message.message_id,
+            direction="in",
+            message_type="text",
+            language=language,
+            text=ocr_message,
+            raw_payload={
+                "menu_ocr": True,
+                "source_message_id": db_incoming_message.id,
+                "documents": len(batch.documents),
+                "failures": len(batch.failures),
+            },
+            trace_id=trace_id,
+        )
+        graph_result = await _run_graph_for_message(
+            db_session=db_session,
+            db_user=db_user,
+            db_conversation=db_conversation,
+            db_incoming_message=ocr_incoming_message,
+            message=message,
+            trace_id=trace_id,
+            input_text=ocr_message,
+            input_type="text",
+            language=language,
+        )
+        response_text = graph_result.final_response_text
+        if not isinstance(response_text, str) or not response_text.strip():
+            response_text = (
+                "Извините, произошла ошибка. Попробуйте ещё раз."
+            )
+        partial_notice = _partial_success_notice(batch)
+        if partial_notice:
+            response_text = f"{response_text.rstrip()}\n\n{partial_notice}"
+
+        sent = await answer_safe(message, response_text)
+        await save_outgoing_message(
+            session=db_session,
+            user=db_user,
+            conversation=db_conversation,
+            telegram_message_id=sent.message_id,
+            text=response_text,
+            language=language,
+            trace_id=trace_id,
+            raw_payload={
+                "input_type": "menu_attachment",
+                "ocr_status": batch.status,
+                "documents": len(batch.documents),
+                "failures": len(batch.failures),
+            },
+        )
+    except Exception:
+        logger.exception(
+            "menu_attachment_processing_failed",
+            extra={"trace_id": trace_id},
+        )
+        await notify_dev_admin(
+            bot=message.bot,
+            error="Menu attachment processing failed",
+            trace_id=trace_id,
+            user_info=f"user={db_user.telegram_user_id}",
+        )
+        await _send_and_save_text(
+            message=message,
+            db_session=db_session,
+            db_user=db_user,
+            db_conversation=db_conversation,
+            trace_id=trace_id,
+            response_text=USER_NO_TEXT_MESSAGE,
+            language=language,
+            raw_payload={"input_type": "menu_attachment", "status": "failed"},
+        )
+    finally:
+        for path in temp_paths:
+            await cleanup_temp_file(path, reason="telegram_menu_attachment_cleanup")
+
+
 @router.message(F.contact)
 async def contact_handler(
     message: Message,
@@ -103,7 +273,11 @@ async def contact_handler(
 ) -> None:
     if db_user.preferred_language is None:
         response_text = text("language_required")
-        sent = await answer_safe(message, response_text, reply_markup=language_keyboard())
+        sent = await answer_safe(
+            message,
+            response_text,
+            reply_markup=language_keyboard(),
+        )
         await save_outgoing_message(
             session=db_session,
             user=db_user,
@@ -166,7 +340,11 @@ async def voice_handler(
 ) -> None:
     if db_user.preferred_language is None:
         response_text = text("language_required")
-        sent = await answer_safe(message, response_text, reply_markup=language_keyboard())
+        sent = await answer_safe(
+            message,
+            response_text,
+            reply_markup=language_keyboard(),
+        )
         await save_outgoing_message(
             session=db_session,
             user=db_user,
@@ -432,8 +610,8 @@ async def _run_graph_for_message(
             "agent_execution",
             extra={
                 "trace_id": trace_id,
-                "input": input_text,
-                "output": response_text,
+                "input_chars": len(input_text),
+                "output_chars": len(response_text or ""),
             },
         )
         return GraphResult(
@@ -496,6 +674,92 @@ def _reply_markup_for_graph_result(graph_result: GraphResult, language: str):
     return None
 
 
+async def _download_menu_attachments(message: Message) -> list[IncomingAttachment]:
+    attachments: list[IncomingAttachment] = []
+    if message.document is not None:
+        document = message.document
+        file_name = document.file_name or f"document-{document.file_unique_id}"
+        path = _create_temp_menu_path(Path(file_name).suffix or ".bin")
+        telegram_file = await message.bot.get_file(document.file_id)
+        if telegram_file.file_path is None:
+            raise RuntimeError("Telegram document file path is empty")
+        await message.bot.download_file(telegram_file.file_path, destination=path)
+        attachments.append(
+            IncomingAttachment(
+                file_id=document.file_id,
+                original_file_name=file_name,
+                declared_mime_type=document.mime_type,
+                size_bytes=document.file_size,
+                local_path=path,
+            )
+        )
+
+    if message.photo:
+        photo = message.photo[-1]
+        path = _create_temp_menu_path(".jpg")
+        telegram_file = await message.bot.get_file(photo.file_id)
+        if telegram_file.file_path is None:
+            raise RuntimeError("Telegram photo file path is empty")
+        await message.bot.download_file(telegram_file.file_path, destination=path)
+        attachments.append(
+            IncomingAttachment(
+                file_id=photo.file_id,
+                original_file_name=f"photo-{message.message_id}.jpg",
+                declared_mime_type="image/jpeg",
+                size_bytes=photo.file_size,
+                local_path=path,
+            )
+        )
+
+    if not attachments:
+        raise RuntimeError("Message has no supported attachment payload")
+    return attachments
+
+
+def _create_temp_menu_path(suffix: str) -> Path:
+    temp_dir = Path(tempfile.gettempdir()) / "walt-traffic-menu-ocr"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(
+        prefix="menu-",
+        suffix=suffix,
+        dir=temp_dir,
+        delete=False,
+    )
+    path = Path(handle.name)
+    handle.close()
+    return path
+
+
+def _first_failure_message(batch: OcrBatchResult) -> str | None:
+    if len(batch.failures) == 1:
+        return batch.failures[0].user_message
+    return None
+
+
+def _partial_success_notice(batch: OcrBatchResult) -> str:
+    if not batch.documents or not batch.failures:
+        return ""
+
+    failed_names = [
+        failure.original_file_name
+        for failure in batch.failures
+        if failure.original_file_name
+    ]
+    if not failed_names:
+        return (
+            f"Я обработал {len(batch.documents)} из "
+            f"{len(batch.documents) + len(batch.failures)} файлов."
+        )
+
+    names = ", ".join(failed_names[:5])
+    extra = "" if len(failed_names) <= 5 else f" и ещё {len(failed_names) - 5}"
+    return (
+        f"Я обработал {len(batch.documents)} из "
+        f"{len(batch.documents) + len(batch.failures)} файлов. "
+        f"Не удалось распознать: {names}{extra}."
+    )
+
+
 async def _ensure_ogg(file_path: str) -> Path:
     path = Path(file_path)
     if path.suffix.casefold() in (".ogg", ".opus"):
@@ -530,5 +794,8 @@ async def answer_safe(message: Message, text: str, **kwargs) -> Message:
     try:
         return await message.answer(text, parse_mode="Markdown", **kwargs)
     except TelegramBadRequest:
-        logger.warning("markdown_parse_failed_falling_back_to_plain", extra={"text": text[:200]})
+        logger.warning(
+            "markdown_parse_failed_falling_back_to_plain",
+            extra={"text": text[:200]},
+        )
         return await message.answer(text, parse_mode=None, **kwargs)
