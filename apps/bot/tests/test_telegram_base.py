@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from pydantic import SecretStr
 
 from app.config import Settings
+from app.telegram.handlers_messages import split_telegram_text
 from app.telegram.handlers_start import (
     _admin_access_denied_text,
     _admin_one_time_link_text,
@@ -54,6 +55,19 @@ def test_admin_command_texts():
         "https://bot.example.com/admin/auth"
     )
     assert "only to administrators" in _admin_access_denied_text("en")
+
+
+def test_split_telegram_text_keeps_parts_under_limit():
+    source = "Первый абзац.\n\n" + ("длинный текст " * 120)
+
+    parts = split_telegram_text(source, max_chars=120)
+
+    assert len(parts) > 1
+    assert all(len(part) <= 120 for part in parts)
+    assert "".join(part.replace("\n", "") for part in parts).replace(" ", "") == (
+        source.replace("\n", "").replace(" ", "")
+    )
+
 
 def test_webhook_secret_validation_rejects_invalid_secret():
     settings = Settings(telegram_webhook_secret=SecretStr("expected-secret"))

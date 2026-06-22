@@ -41,6 +41,7 @@ from app.telegram.texts import normalize_language, text
 
 router = Router(name="messages")
 logger = logging.getLogger(__name__)
+TELEGRAM_SAFE_TEXT_LIMIT = 3900
 
 
 @router.message(F.text)
@@ -87,20 +88,20 @@ async def fallback_text_handler(
     if not isinstance(response_text, str) or not response_text.strip():
         response_text = "Извините, произошла ошибка. Попробуйте ещё раз."
     reply_markup = _reply_markup_for_graph_result(graph_result, language)
-    sent = await answer_safe(message, response_text, reply_markup=reply_markup)
-    await save_outgoing_message(
-        session=db_session,
-        user=db_user,
-        conversation=db_conversation,
-        telegram_message_id=sent.message_id,
-        text=response_text,
-        language=language,
+    await _send_and_save_text(
+        message=message,
+        db_session=db_session,
+        db_user=db_user,
+        db_conversation=db_conversation,
         trace_id=trace_id,
+        response_text=response_text,
+        language=language,
         raw_payload={
             "intent": graph_result.intent,
             "safety_status": graph_result.safety_status,
             **graph_result.metadata,
         },
+        reply_markup=reply_markup,
     )
 
 
@@ -220,15 +221,14 @@ async def menu_attachment_handler(
         if partial_notice:
             response_text = f"{response_text.rstrip()}\n\n{partial_notice}"
 
-        sent = await answer_safe(message, response_text)
-        await save_outgoing_message(
-            session=db_session,
-            user=db_user,
-            conversation=db_conversation,
-            telegram_message_id=sent.message_id,
-            text=response_text,
-            language=language,
+        await _send_and_save_text(
+            message=message,
+            db_session=db_session,
+            db_user=db_user,
+            db_conversation=db_conversation,
             trace_id=trace_id,
+            response_text=response_text,
+            language=language,
             raw_payload={
                 "input_type": "menu_attachment",
                 "ocr_status": batch.status,
@@ -307,25 +307,21 @@ async def contact_handler(
     if not isinstance(response_text, str) or not response_text.strip():
         response_text = "Извините, произошла ошибка. Попробуйте ещё раз."
     reply_markup = _reply_markup_for_graph_result(graph_result, language)
-    sent = await answer_safe(
-        message,
-        response_text,
-        reply_markup=reply_markup,
-    )
-    await save_outgoing_message(
-        session=db_session,
-        user=db_user,
-        conversation=db_conversation,
-        telegram_message_id=sent.message_id,
-        text=graph_result.final_response_text,
-        language=language,
+    await _send_and_save_text(
+        message=message,
+        db_session=db_session,
+        db_user=db_user,
+        db_conversation=db_conversation,
         trace_id=trace_id,
+        response_text=response_text,
+        language=language,
         raw_payload={
             "input_type": "contact",
             "intent": graph_result.intent,
             "safety_status": graph_result.safety_status,
             **graph_result.metadata,
         },
+        reply_markup=reply_markup,
     )
 
 
@@ -439,15 +435,14 @@ async def voice_handler(
         if not isinstance(response_text, str) or not response_text.strip():
             response_text = "Извините, произошла ошибка. Попробуйте ещё раз."
         reply_markup = _reply_markup_for_graph_result(graph_result, language)
-        sent = await answer_safe(message, response_text, reply_markup=reply_markup)
-        await save_outgoing_message(
-            session=db_session,
-            user=db_user,
-            conversation=db_conversation,
-            telegram_message_id=sent.message_id,
-            text=response_text,
-            language=language,
+        await _send_and_save_text(
+            message=message,
+            db_session=db_session,
+            db_user=db_user,
+            db_conversation=db_conversation,
             trace_id=trace_id,
+            response_text=response_text,
+            language=language,
             raw_payload={
                 "input_type": "voice",
                 "intent": graph_result.intent,
@@ -456,6 +451,7 @@ async def voice_handler(
                 "stt_model": stt_result.model,
                 **graph_result.metadata,
             },
+            reply_markup=reply_markup,
         )
 
         try:
@@ -656,18 +652,32 @@ async def _send_and_save_text(
     response_text: str,
     language: str | None,
     raw_payload: dict,
+    reply_markup=None,
 ) -> None:
-    sent = await answer_safe(message, response_text)
-    await save_outgoing_message(
-        session=db_session,
-        user=db_user,
-        conversation=db_conversation,
-        telegram_message_id=sent.message_id,
-        text=response_text,
-        language=language,
-        trace_id=trace_id,
-        raw_payload=raw_payload,
-    )
+    parts = split_telegram_text(response_text)
+    for index, part in enumerate(parts):
+        part_reply_markup = reply_markup if index == len(parts) - 1 else None
+        sent = await answer_safe(message, part, reply_markup=part_reply_markup)
+        payload = dict(raw_payload)
+        if len(parts) > 1:
+            payload.update(
+                {
+                    "split_message": True,
+                    "split_part": index + 1,
+                    "split_total": len(parts),
+                    "original_text_chars": len(response_text),
+                }
+            )
+        await save_outgoing_message(
+            session=db_session,
+            user=db_user,
+            conversation=db_conversation,
+            telegram_message_id=sent.message_id,
+            text=part,
+            language=language,
+            trace_id=trace_id,
+            raw_payload=payload,
+        )
 
 
 def _reply_markup_for_graph_result(graph_result: GraphResult, language: str):
@@ -799,3 +809,42 @@ async def answer_safe(message: Message, text: str, **kwargs) -> Message:
             extra={"text": text[:200]},
         )
         return await message.answer(text, parse_mode=None, **kwargs)
+
+
+def split_telegram_text(
+    text_value: str,
+    *,
+    max_chars: int = TELEGRAM_SAFE_TEXT_LIMIT,
+) -> list[str]:
+    text = text_value or ""
+    if max_chars <= 0:
+        raise ValueError("max_chars must be positive")
+    if len(text) <= max_chars:
+        return [text]
+
+    parts: list[str] = []
+    remaining = text
+    while len(remaining) > max_chars:
+        cut_at = _find_split_index(remaining, max_chars)
+        part = remaining[:cut_at].rstrip()
+        if not part:
+            part = remaining[:max_chars]
+            cut_at = max_chars
+        parts.append(part)
+        remaining = remaining[cut_at:].lstrip()
+    if remaining:
+        parts.append(remaining)
+    return parts or [""]
+
+
+def _find_split_index(text: str, max_chars: int) -> int:
+    candidates = (
+        text.rfind("\n\n", 0, max_chars + 1),
+        text.rfind("\n", 0, max_chars + 1),
+        text.rfind(". ", 0, max_chars + 1),
+        text.rfind(" ", 0, max_chars + 1),
+    )
+    for index in candidates:
+        if index >= max_chars // 2:
+            return index + 1
+    return max_chars
