@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import tempfile
 from pathlib import Path
 
 from aiogram import F, Router
@@ -24,6 +23,11 @@ from app.services.mistral_ocr_service import (
     IncomingAttachment,
     MistralOcrService,
     OcrBatchResult,
+)
+from app.services.pending_admin_attachments import (
+    StoredAdminAttachment,
+    add_pending_attachments_to_message,
+    create_pending_attachment_path,
 )
 from app.speech import create_speech_providers
 from app.speech.base import SpeechProviderError
@@ -148,10 +152,22 @@ async def menu_attachment_handler(
         raw_payload={"input_type": "menu_attachment", "status": "accepted"},
     )
 
-    temp_paths: list[Path] = []
     try:
         attachments = await _download_menu_attachments(message)
-        temp_paths = [attachment.local_path for attachment in attachments]
+        add_pending_attachments_to_message(
+            db_incoming_message,
+            [
+                StoredAdminAttachment(
+                    message_id=db_incoming_message.id,
+                    path=attachment.local_path,
+                    original_file_name=attachment.original_file_name,
+                    mime_type=attachment.declared_mime_type,
+                    size_bytes=attachment.size_bytes,
+                )
+                for attachment in attachments
+            ],
+        )
+        await db_session.flush()
 
         batch = await MistralOcrService(settings).recognize_documents(
             attachments,
@@ -257,9 +273,6 @@ async def menu_attachment_handler(
             language=language,
             raw_payload={"input_type": "menu_attachment", "status": "failed"},
         )
-    finally:
-        for path in temp_paths:
-            await cleanup_temp_file(path, reason="telegram_menu_attachment_cleanup")
 
 
 @router.message(F.contact)
@@ -689,7 +702,7 @@ async def _download_menu_attachments(message: Message) -> list[IncomingAttachmen
     if message.document is not None:
         document = message.document
         file_name = document.file_name or f"document-{document.file_unique_id}"
-        path = _create_temp_menu_path(Path(file_name).suffix or ".bin")
+        path = create_pending_attachment_path(file_name)
         telegram_file = await message.bot.get_file(document.file_id)
         if telegram_file.file_path is None:
             raise RuntimeError("Telegram document file path is empty")
@@ -706,7 +719,8 @@ async def _download_menu_attachments(message: Message) -> list[IncomingAttachmen
 
     if message.photo:
         photo = message.photo[-1]
-        path = _create_temp_menu_path(".jpg")
+        file_name = f"photo-{message.message_id}.jpg"
+        path = create_pending_attachment_path(file_name)
         telegram_file = await message.bot.get_file(photo.file_id)
         if telegram_file.file_path is None:
             raise RuntimeError("Telegram photo file path is empty")
@@ -714,7 +728,7 @@ async def _download_menu_attachments(message: Message) -> list[IncomingAttachmen
         attachments.append(
             IncomingAttachment(
                 file_id=photo.file_id,
-                original_file_name=f"photo-{message.message_id}.jpg",
+                original_file_name=file_name,
                 declared_mime_type="image/jpeg",
                 size_bytes=photo.file_size,
                 local_path=path,
@@ -724,20 +738,6 @@ async def _download_menu_attachments(message: Message) -> list[IncomingAttachmen
     if not attachments:
         raise RuntimeError("Message has no supported attachment payload")
     return attachments
-
-
-def _create_temp_menu_path(suffix: str) -> Path:
-    temp_dir = Path(tempfile.gettempdir()) / "walt-traffic-menu-ocr"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile(
-        prefix="menu-",
-        suffix=suffix,
-        dir=temp_dir,
-        delete=False,
-    )
-    path = Path(handle.name)
-    handle.close()
-    return path
 
 
 def _first_failure_message(batch: OcrBatchResult) -> str | None:

@@ -8,7 +8,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories import EscalationRepository
-from app.services.admin_notify import send_admin_notification
+from app.services.admin_notify import (
+    AdminDocumentToSend,
+    send_admin_documents,
+    send_admin_notification,
+)
+from app.services.pending_admin_attachments import (
+    clear_pending_admin_attachments,
+    delete_attachment_files,
+    get_pending_admin_attachments,
+)
 
 
 def _get_config(config: RunnableConfig) -> dict[str, Any]:
@@ -21,6 +30,10 @@ def _get_session(config: RunnableConfig) -> AsyncSession:
 
 def _get_user(config: RunnableConfig) -> Any:
     return _get_config(config)["user"]
+
+
+def _get_conversation(config: RunnableConfig) -> Any | None:
+    return _get_config(config).get("conversation")
 
 
 def _get_admin_bot(config: RunnableConfig) -> Any | None:
@@ -60,6 +73,7 @@ async def send_to_admin(
     """Send the user's request to an administrator."""
     session = _get_session(config)
     user = _get_user(config)
+    conversation = _get_conversation(config)
     admin_bot = _get_admin_bot(config)
     telegram_contact = (
         f"@{user.telegram_username}"
@@ -95,9 +109,32 @@ async def send_to_admin(
         escalation.admin_chat_id = notification.admin_chat_id
     if notification.admin_message_id is not None:
         escalation.admin_message_id = notification.admin_message_id
+
+    pending_attachments = await get_pending_admin_attachments(
+        session,
+        user_id=user.id,
+        conversation_id=getattr(conversation, "id", None),
+    )
+    try:
+        documents_result = await send_admin_documents(
+            bot=admin_bot,
+            documents=[
+                AdminDocumentToSend(
+                    path=attachment.path,
+                    file_name=attachment.original_file_name,
+                    caption=f"Escalation ID: {escalation.id}",
+                )
+                for attachment in pending_attachments
+            ],
+        )
+    finally:
+        await clear_pending_admin_attachments(session, pending_attachments)
+        delete_attachment_files(pending_attachments)
     await session.flush()
 
     if notification.sent:
+        if documents_result.sent_count:
+            return "Request and user documents sent to an administrator."
         return "Request sent to an administrator."
     return "Request saved for an administrator."
 

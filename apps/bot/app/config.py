@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     app_base_url: str = "http://localhost:8000"
     app_timezone: str = "Asia/Tashkent"
     speech_temp_dir: str = "/tmp/walt-traffic-audio"
+    user_attachment_storage_dir: str = "/tmp/walt-traffic-user-attachments"
 
     telegram_bot_token: SecretStr | None = None
     telegram_webhook_secret: SecretStr | None = None

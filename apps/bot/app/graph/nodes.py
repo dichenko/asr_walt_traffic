@@ -8,12 +8,21 @@ from app.db.models import Conversation, User
 from app.db.repositories import EscalationRepository
 from app.graph.intents import classify_intent as classify_user_intent
 from app.graph.state import BotState
-from app.services.admin_notify import send_admin_notification
+from app.services.admin_notify import (
+    AdminDocumentToSend,
+    send_admin_documents,
+    send_admin_notification,
+)
 from app.services.clinic_knowledge import get_clinic_knowledge
 from app.services.faq import generate_admin_faq_answer
 from app.services.owner_sales import (
     handle_owner_sales_message,
     is_owner_sales_in_progress,
+)
+from app.services.pending_admin_attachments import (
+    clear_pending_admin_attachments,
+    delete_attachment_files,
+    get_pending_admin_attachments,
 )
 from app.telegram.texts import Language, text
 
@@ -202,6 +211,26 @@ async def _send_to_admin(
         escalation.admin_chat_id = notification.admin_chat_id
     if notification.admin_message_id is not None:
         escalation.admin_message_id = notification.admin_message_id
+    pending_attachments = await get_pending_admin_attachments(
+        session,
+        user_id=user.id,
+        conversation_id=conversation.id,
+    )
+    try:
+        documents_result = await send_admin_documents(
+            bot=admin_bot,
+            documents=[
+                AdminDocumentToSend(
+                    path=attachment.path,
+                    file_name=attachment.original_file_name,
+                    caption=f"Escalation ID: {escalation.id}",
+                )
+                for attachment in pending_attachments
+            ],
+        )
+    finally:
+        await clear_pending_admin_attachments(session, pending_attachments)
+        delete_attachment_files(pending_attachments)
     await session.flush()
 
     return {
@@ -216,6 +245,8 @@ async def _send_to_admin(
             {
                 "tool": "send_to_admin",
                 "status": "success" if notification.sent else "saved",
+                "documents_sent": documents_result.sent_count,
+                "documents_failed": documents_result.failed_count,
             },
         ],
     }
