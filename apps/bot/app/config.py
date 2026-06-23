@@ -110,6 +110,13 @@ class Settings(BaseSettings):
     muxlisa_tts_max_chars: int = 1512
     muxlisa_tts_speaker: int = 0
 
+    hume_api_key: SecretStr | None = None
+    hume_tts_base_url: str = "https://api.hume.ai"
+    hume_voice_id: str = "85bcfd95-12c3-4288-8f9c-320085d3af98"
+    hume_tts_timeout_ms: int = 60000
+    hume_tts_max_chars: int = 5000
+    hume_tts_speed: float = 0.75
+
     yandex_speechkit_api_key: SecretStr | None = None
     yandex_tts_base_url: str = "https://tts.api.cloud.yandex.net"
     yandex_tts_model: str = "yandex-speechkit-tts-v1"

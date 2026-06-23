@@ -9,6 +9,7 @@ from app.speech import MockSpeechProvider, create_speech_providers
 from app.speech.aisha_provider import AishaSpeechProvider
 from app.speech.azure_provider import AzureSpeechProvider, AzureSpeechStatusError
 from app.speech.base import SpeechProviderError
+from app.speech.hume_provider import HumeSpeechProvider, HumeStatusError
 from app.speech.muxlisa_provider import MuxlisaSpeechProvider
 from app.speech.openai_provider import OpenAISpeechProvider
 from app.speech.temp_files import (
@@ -26,7 +27,7 @@ def test_speech_factory_routes_languages_to_expected_providers():
     providers = create_speech_providers(Settings())
 
     assert providers.stt_for_language("uz") is providers.aisha
-    assert providers.tts_for_language("uz") is providers.aisha
+    assert providers.tts_for_language("uz") is providers.hume
     assert providers.stt_for_language("ru") is providers.openai
     assert providers.tts_for_language("ru") is providers.yandex
     assert providers.stt_for_language("en") is providers.openai
@@ -349,6 +350,143 @@ async def test_muxlisa_tts_requires_api_key():
 
     with pytest.raises(SpeechProviderError, match="MUXLISA_API_KEY"):
         await provider.synthesize("Salom", "uz")
+
+
+async def test_hume_tts_posts_json_and_writes_mp3(monkeypatch):
+    test_dir = _make_test_dir()
+    calls = []
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"content-type": "audio/mpeg"}
+        content = b"mp3-bytes"
+        text = ""
+
+    class FakeAsyncClient:
+        def __init__(self, *, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, *, headers, json):
+            calls.append(
+                {
+                    "url": url,
+                    "headers": headers,
+                    "json": json,
+                    "timeout": self.timeout,
+                }
+            )
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        "app.speech.hume_provider.httpx.AsyncClient",
+        FakeAsyncClient,
+    )
+
+    provider = HumeSpeechProvider(
+        Settings(
+            speech_temp_dir=str(test_dir),
+            hume_api_key="test-key",
+            hume_voice_id="voice-id",
+            hume_tts_timeout_ms=12000,
+            hume_tts_speed=0.75,
+        )
+    )
+    result = await provider.synthesize("**Salom** - test", "uz")
+
+    assert Path(result.file_path).read_bytes() == b"mp3-bytes"
+    assert Path(result.file_path).suffix == ".mp3"
+    assert result.provider == "hume"
+    assert result.mime_type == "audio/mpeg"
+    assert result.format == "mp3"
+    assert result.voice == "voice-id"
+    assert calls == [
+        {
+            "url": "https://api.hume.ai/v0/tts/file",
+            "headers": {
+                "X-Hume-Api-Key": "test-key",
+                "Content-Type": "application/json",
+                "Accept": "audio/mpeg, audio/mp3, application/octet-stream",
+            },
+            "json": {
+                "version": "2",
+                "utterances": [
+                    {
+                        "text": "Salom test",
+                        "voice": {"id": "voice-id"},
+                        "speed": 0.75,
+                    }
+                ],
+                "format": {"type": "mp3"},
+                "num_generations": 1,
+                "split_utterances": False,
+            },
+            "timeout": 12,
+        }
+    ]
+
+    await cleanup_temp_file(result.file_path, reason="test_cleanup")
+    test_dir.rmdir()
+
+
+async def test_hume_tts_requires_api_key():
+    provider = HumeSpeechProvider(Settings())
+
+    with pytest.raises(SpeechProviderError, match="HUME_API_KEY"):
+        await provider.synthesize("Salom", "uz")
+
+
+async def test_hume_tts_logs_error_settings_without_api_key(monkeypatch, caplog):
+    class FakeResponse:
+        status_code = 400
+        headers = {"content-type": "application/json"}
+        text = '{"error":"bad payload"}'
+        content = b""
+
+        def json(self):
+            return {"error": "bad payload"}
+
+    class FakeAsyncClient:
+        def __init__(self, *, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, _url, *, headers, json):
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        "app.speech.hume_provider.httpx.AsyncClient",
+        FakeAsyncClient,
+    )
+
+    provider = HumeSpeechProvider(
+        Settings(
+            hume_api_key="secret-key",
+            hume_voice_id="voice-id",
+            hume_tts_speed=0.75,
+        )
+    )
+
+    with caplog.at_level("ERROR", logger="app.speech.hume_provider"):
+        with pytest.raises(HumeStatusError):
+            await provider.synthesize("Salom", "uz")
+
+    record = next(item for item in caplog.records if item.message == "hume_tts_failed")
+    assert record.status_code == 400
+    assert record.body == "{'error': 'bad payload'}"
+    assert record.voice == "voice-id"
+    assert record.speed == 0.75
+    assert "secret-key" not in caplog.text
 
 
 async def test_aisha_tts_logs_error_settings_without_api_key(monkeypatch, caplog):
